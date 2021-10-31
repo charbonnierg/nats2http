@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "nats-http-gateway"
+version = "0.1.0"
+description = ""
+authors = ["charbonnierg <guillaume.charbonnier@araymond.com>"]
+packages = [{include = "nats2http", from = "src"}]
+[tool.poetry.dependencies]
+python = "^3.8"
+starlette = "^0.16.0"
+asyncio-nats-client = {git = "https://github.com/charbonnierg/nats.py.git", rev = "next"}
+uvicorn = "^0.15.0"
+loguru = "^0.5.3"
+orjson = "^3.6.4"
+uvloop = "^0.16.0"
+httptools = "^0.3.0"
+
+[tool.poetry.dev-dependencies]
+flake8 = "^4.0.1"
+black = "^21.9b0"
+isort = "^5.9.3"
+mypy = "^0.910"
+locust = "^2.4.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
