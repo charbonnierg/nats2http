@@ -51,7 +51,10 @@ class ExceptionHandlers(Enum):
     )
     InternalError = exception_handler(500, "Internal server error", "{subject} - {exc}")
     InvalidCredentialsError = exception_handler(
-        403, "Invalid credentials", "{subject} - {exc}"
+        401, "Invalid credentials", "{subject} - {exc}"
+    )
+    UnauthorizedError = exception_handler(
+        403,"Authorization failed", "{subject} - {exc}" 
     )
     ConnectionError = exception_handler(503, "Service unavailable", "{subject} - {exc}")
     MaxPayloadError = exception_handler(
@@ -60,18 +63,24 @@ class ExceptionHandlers(Enum):
 
 
 exception_handlers = {
-    ErrNoResponder: ExceptionHandlers.NoResponderError,
     asyncio.TimeoutError: ExceptionHandlers.TimeoutError,
     ErrTimeout: ExceptionHandlers.TimeoutError,
     TimeoutError: ExceptionHandlers.TimeoutError,
+
+    ErrBadSubject: ExceptionHandlers.InvalidRequestError,
+
+    ErrNoResponder: ExceptionHandlers.NoResponderError,
+
+    ErrAuthorization: ExceptionHandlers.UnauthorizedError,
     ErrInvalidUserCredentials: ExceptionHandlers.InvalidCredentialsError,
+
     ErrConnectionReconnecting: ExceptionHandlers.ConnectionError,
     ErrConnectionDraining: ExceptionHandlers.ConnectionError,
     ErrConnectionClosed: ExceptionHandlers.ConnectionError,
     ErrStaleConnection: ExceptionHandlers.ConnectionError,
+
     ErrNoServers: ExceptionHandlers.ConnectionError,
-    ErrAuthorization: ExceptionHandlers.InvalidCredentialsError,
     ErrMaxPayload: ExceptionHandlers.MaxPayloadError,
+
     NatsError: ExceptionHandlers.InternalError,
-    ErrBadSubject: ExceptionHandlers.InvalidRequestError,
 }

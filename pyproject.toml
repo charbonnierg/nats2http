@@ -13,6 +13,8 @@ loguru = "^0.5.3"
 orjson = "^3.6.4"
 uvloop = "^0.16.0"
 httptools = "^0.3.0"
+cachetools = "^4.2.4"
+nkeys = "^0.1.0"
 
 [tool.poetry.dev-dependencies]
 flake8 = "^4.0.1"

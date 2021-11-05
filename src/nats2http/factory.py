@@ -1,48 +1,67 @@
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Literal
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.routing import Route
 
 from loguru import logger
 
-from nats2http.client import NATS2HTTPClient
+from starlette.applications import Starlette
+from starlette.exceptions import ExceptionMiddleware
+from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
+# from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.routing import Route
+
+from nats2http.auth import NATSAnonymousUser, NATSUser, NatsAuthBackend
+
 from nats2http.errors import exception_handlers
 from nats2http import settings
 
 
-def create_app():
-    # First create a client
-    client = NATS2HTTPClient()
+class NATSRequest(Request):
+    user: NATSUser | NATSAnonymousUser
 
-    # Define lifespan
-    @asynccontextmanager
-    async def lifespan(app: Starlette):
-        logger.info("Connecting to NATS")
-        await client.connect()
-        try:
-            logger.info("Application ready")
-            yield
-        except asyncio.CancelledError:
-            logger.info("Application shutdown requested")
-        finally:
-            logger.info("Closing connection to NATS")
-            await client.close()
-            logger.info("Applican shutdown finished")
+
+def create_app():
 
     # Define handler
-    async def handler(request: Request):
+    async def handler(request: NATSRequest):
+        # Fetch client
+        client = request.user.client
+        # Dispatch request
         result = await client.dispatch(request)
+        # Return HTTP response
         return result.build_response()
 
     # Define route
     route = Route("/{path:path}", endpoint=handler, methods=["GET", "POST", "PUT"])
 
+    # Define auth backend
+    auth_backend = NatsAuthBackend()
+
+    # Define middlewares
+    middleware = [
+        Middleware(ExceptionMiddleware, handlers=exception_handlers, debug=settings.DEV),
+        # Middleware(SessionMiddleware, secret_key="SECRET", max_age=3600, https_only=False), 
+        Middleware(AuthenticationMiddleware, backend=auth_backend)
+    ]
+
+    # Define lifecycle
+    @asynccontextmanager
+    async def lifespan(_: Starlette):
+        logger.info("Entering application lifespan")
+        try:
+            yield
+        finally:
+            pass
+        logger.info("Exiting application lifespan")
+        return
+
+    # Return Startlette app
     return Starlette(
-        routes=[route],
-        exception_handlers=exception_handlers,
         lifespan=lifespan,
+        middleware=middleware,
+        routes=[route],
         debug=settings.DEV,
     )
 
@@ -64,7 +83,7 @@ def start_app(
         loop=loop,
         http=http,
         workers=1 if dev else workers,
-        debug=dev,
-        reload=dev,
+        debug=False,
+        reload=False,
         root_path=root_path,
     )

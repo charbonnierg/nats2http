@@ -4,10 +4,12 @@ import asyncio
 import json
 from dataclasses import dataclass
 from typing import Any
+
 from nats import connect, NATS
-from nats.aio.errors import ErrBadSubject
+from nats.aio.errors import ErrAuthorization, ErrBadSubject, ErrInvalidUserCredentials, NatsError
 from starlette.requests import Request
 from starlette.responses import Response
+from loguru import logger
 
 from nats2http.utils import Subject
 
@@ -22,7 +24,6 @@ class RequestResult:
     def build_response(self) -> Response:
         return Response(self.data, self.code, self.headers, self.media_type)
 
-
 class NATS2HTTPClient:
     def __init__(
         self,
@@ -32,22 +33,35 @@ class NATS2HTTPClient:
     ) -> None:
         self.nc = NATS()
         if servers:
-            kwargs = {**kwargs, "servers": servers}
+            kwargs = {"error_cb": self._on_error, **kwargs, "servers": servers}
         self.options = kwargs
         self.max_inflights = max_inflights
         self.semaphore = asyncio.Semaphore(max_inflights)
 
+    async def _on_error(self, err: Exception):
+        """NATS keeps reconnecting even on ErrAuthorization and ErrInvalidUserCredentials by default"""
+        msg = str(err).lower()
+        if "authorization" in msg:
+            raise ErrAuthorization
+        if "credential" in msg:
+            raise ErrInvalidUserCredentials
+
     async def connect(self, timeout: int | None = 5):
+    
         self.nc = await asyncio.wait_for(
             connect(**self.options),
             timeout=timeout
         )
+        logger.trace(f"NATS Client {self.nc._client_id} - Connection opened")
 
     async def close(self, timeout: int | None = 30):
+        _cid = self.nc._client_id
+        logger.trace(f"NATS Client {_cid} - Closing connection")
         await asyncio.wait_for(
             self.nc.close(),
             timeout=timeout,
         )
+        logger.trace(f"NATS Client {_cid} - Closed connection")
 
     async def dispatch(self, request: Request) -> RequestResult:
         async with self.semaphore:
@@ -65,6 +79,7 @@ class NATS2HTTPClient:
         """Publish a message on NATS according to given HTTP PUT request"""
         # Gather subject
         subject = Subject.from_request(request)
+        logger.trace(f"{request.client} - Dispatching PUT request on {subject}")
         # Gather body
         body = await request.body()
         # Get request headers
@@ -90,6 +105,7 @@ class NATS2HTTPClient:
         """Perform a request on NATS according to given HTTP GET request"""
         # Gather subject
         subject = Subject.from_request(request)
+        logger.trace(f"{request.client} - Dispatching GET request on {subject}")
         # Gather query parameters
         body = dict(request.query_params.items())
         # Fetch timeout
@@ -117,6 +133,7 @@ class NATS2HTTPClient:
     async def handle_post_request(self, request: Request) -> RequestResult:
         """Perform a request on NATS according to given HTTP GET request"""
         subject = Subject.from_request(request)
+        logger.trace(f"{request.client} - Dispatching POST request on {subject}")
         # Gather body
         body = await request.body()
         # Fetch timeout
